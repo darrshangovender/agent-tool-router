@@ -1,4 +1,16 @@
-# agent-tool-router — A small, well-evaluated tool-use router
+<div align="center">
+
+# agent-tool-router — Well-evaluated tool-use routing
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![LLM](https://img.shields.io/badge/LLM-Anthropic%20%2F%20OpenAI-CC785C)](#)
+[![Status](https://img.shields.io/badge/Status-Design%20spec-yellow)](#)
+[![Approach](https://img.shields.io/badge/Approach-Two--stage%20routing-1F3A8A)](#architecture)
+
+</div>
+
+---
 
 > Given a user question, decide which of N tools to call (or none), parse arguments, and return a structured ToolCall.
 
