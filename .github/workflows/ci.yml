@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          # Install without the heavy sentence-transformers dep — tests use StubEncoder.
+          pip install -e .
+          pip install pytest pytest-cov ruff
+
+      - name: Lint
+        run: ruff check agent_tool_router tests
+
+      - name: Test
+        run: pytest -q --cov=agent_tool_router --cov-report=term-missing
