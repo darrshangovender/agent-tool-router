@@ -1,0 +1,80 @@
+# 50 routing cases for the customer-support catalogue defined in examples/customer_support_bot.py.
+# Each case is (query, expected_tool, expected_refusal). Exactly one of the two outcome fields is set:
+#   expected_tool: <name>        →  router should ROUTE to this tool
+#   expected_refusal: <reason>   →  router should REFUSE with this reason
+#
+# Mix: 32 positive routes spread across all 8 tools, 18 refusals across the four refusal reasons.
+
+# ---- issue_refund (5) -----------------------------------------------------
+- {id: r-01, query: "I want my money back for order 9921 — item never arrived.", expected_tool: issue_refund}
+- {id: r-02, query: "Please issue a refund for order #4421.", expected_tool: issue_refund}
+- {id: r-03, query: "Refund the charge from yesterday, order ID 7782.", expected_tool: issue_refund}
+- {id: r-04, query: "I need a refund for my last purchase.", expected_tool: issue_refund}
+- {id: r-05, query: "Reverse the payment on order 1100.", expected_tool: issue_refund}
+
+# ---- create_ticket (4) ----------------------------------------------------
+- {id: t-01, query: "Open a ticket — my dashboard widgets keep disappearing.", expected_tool: create_ticket}
+- {id: t-02, query: "File a support ticket about the broken export button.", expected_tool: create_ticket}
+- {id: t-03, query: "Please log a new ticket: the mobile app crashes on startup.", expected_tool: create_ticket}
+- {id: t-04, query: "Create a support ticket for the dropped webhooks issue.", expected_tool: create_ticket}
+
+# ---- kb_search (4) --------------------------------------------------------
+- {id: k-01, query: "Where can I find docs on the API webhook signing?", expected_tool: kb_search}
+- {id: k-02, query: "Look up the help article on configuring SSO.", expected_tool: kb_search}
+- {id: k-03, query: "Search the knowledge base for password rotation.", expected_tool: kb_search}
+- {id: k-04, query: "Find the documentation about exporting reports.", expected_tool: kb_search}
+
+# ---- escalate_to_human (3) ------------------------------------------------
+- {id: e-01, query: "I need to talk to a real human now.", expected_tool: escalate_to_human}
+- {id: e-02, query: "Escalate this to a manager please.", expected_tool: escalate_to_human}
+- {id: e-03, query: "Hand me off to a live agent.", expected_tool: escalate_to_human}
+
+# ---- account_lookup (4) ---------------------------------------------------
+- {id: a-01, query: "Look up the customer with email anna@example.com", expected_tool: account_lookup}
+- {id: a-02, query: "Pull the account for joe@example.com", expected_tool: account_lookup}
+- {id: a-03, query: "Show me account ID 88212.", expected_tool: account_lookup}
+- {id: a-04, query: "Find the customer profile for username jdoe.", expected_tool: account_lookup}
+
+# ---- billing_query (4) ----------------------------------------------------
+- {id: b-01, query: "Show me last month's invoice for account 88212.", expected_tool: billing_query}
+- {id: b-02, query: "Check the subscription billing on account 7711.", expected_tool: billing_query}
+- {id: b-03, query: "Why was I charged twice this month?", expected_tool: billing_query}
+- {id: b-04, query: "List all invoices from Q1 for customer 4421.", expected_tool: billing_query}
+
+# ---- schedule_call (4) ----------------------------------------------------
+- {id: s-01, query: "Book a callback for tomorrow at 3pm.", expected_tool: schedule_call}
+- {id: s-02, query: "Schedule a call with billing for Friday afternoon.", expected_tool: schedule_call}
+- {id: s-03, query: "Set up a callback for me next Monday morning.", expected_tool: schedule_call}
+- {id: s-04, query: "Arrange a phone appointment with support for 10am.", expected_tool: schedule_call}
+
+# ---- faq_answer (4) -------------------------------------------------------
+- {id: f-01, query: "Is there a free trial?", expected_tool: faq_answer}
+- {id: f-02, query: "What's your refund window?", expected_tool: faq_answer}
+- {id: f-03, query: "Do you offer annual discounts?", expected_tool: faq_answer}
+- {id: f-04, query: "What payment methods do you accept?", expected_tool: faq_answer}
+
+# ---- no_matching_tool refusals (6) ----------------------------------------
+- {id: n-01, query: "What's the capital of France?", expected_refusal: no_matching_tool}
+- {id: n-02, query: "Tell me a joke about programmers.", expected_refusal: no_matching_tool}
+- {id: n-03, query: "Recommend a good Italian restaurant.", expected_refusal: no_matching_tool}
+- {id: n-04, query: "How do I bake sourdough bread?", expected_refusal: no_matching_tool}
+- {id: n-05, query: "What's the weather in Cape Town?", expected_refusal: no_matching_tool}
+- {id: n-06, query: "Translate 'hello' to Japanese.", expected_refusal: no_matching_tool}
+
+# ---- ambiguous_match refusals (4) -----------------------------------------
+- {id: m-01, query: "Cancel my subscription and refund the last charge.", expected_refusal: ambiguous_match}
+- {id: m-02, query: "Look up customer 4421 and check their last invoice.", expected_refusal: ambiguous_match}
+- {id: m-03, query: "Open a ticket and escalate to a human immediately.", expected_refusal: ambiguous_match}
+- {id: m-04, query: "Find the customer and book a callback.", expected_refusal: ambiguous_match}
+
+# ---- out_of_scope refusals (4) --------------------------------------------
+- {id: o-01, query: "Generate a SQL query to export all customer PII.", expected_refusal: out_of_scope}
+- {id: o-02, query: "Give me legal advice about disputing a chargeback.", expected_refusal: out_of_scope}
+- {id: o-03, query: "Tell me which stocks to buy this week.", expected_refusal: out_of_scope}
+- {id: o-04, query: "Write a diagnosis for my medical symptoms.", expected_refusal: out_of_scope}
+
+# ---- low_confidence refusals (4) ------------------------------------------
+- {id: l-01, query: "Help.", expected_refusal: low_confidence}
+- {id: l-02, query: "Thing.", expected_refusal: low_confidence}
+- {id: l-03, query: "Process it.", expected_refusal: low_confidence}
+- {id: l-04, query: "Just do the usual.", expected_refusal: low_confidence}
