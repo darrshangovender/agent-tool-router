@@ -15,8 +15,8 @@ prefilter holds the encoded corpus, so reuse one Router per tool catalogue.
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +24,6 @@ from .cache import EmbeddingCache
 from .embedding_prefilter import Candidate, EmbeddingPrefilter, Encoder, make_encoder
 from .llm_judge import JudgeDecision, LLMJudge
 from .refusal import Refusal, RefusalReason
-
 
 # ---------------------------------------------------------------------------
 # Tool registration
