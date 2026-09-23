@@ -29,13 +29,17 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from agent_tool_router import RefusalReason, Router  # noqa: E402
+from agent_tool_router import Router  # noqa: E402
 from agent_tool_router.embedding_prefilter import make_encoder  # noqa: E402
-from agent_tool_router.llm_judge import AnthropicBackend, EchoBackend, LLMJudge, OpenAIBackend  # noqa: E402
+from agent_tool_router.llm_judge import (  # noqa: E402
+    AnthropicBackend,
+    EchoBackend,
+    LLMJudge,
+    OpenAIBackend,
+)
 
 # Re-import the catalogue from the example so corpus and demo stay in sync.
 from examples.customer_support_bot import TOOLS  # noqa: E402
-
 
 # Rough cost-per-1000-routes estimates ($USD).
 # Embeddings: local sentence-transformers is $0; openai text-embedding-3-small is $0.02/1M tokens.
