@@ -14,15 +14,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# sentence-transformers pulls in torch (~2 GB). It is opt-in: the test suite
+# runs against StubEncoder and never needs a real model.
 embeddings = ["sentence-transformers>=2.7"]
 openai = ["openai>=1.50.0"]
 anthropic = ["anthropic>=0.40.0"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.1",
-    "ruff>=0.4",
-    "sentence-transformers>=2.7",
+    "ruff>=0.6",
 ]
+
+[project.urls]
+Homepage = "https://github.com/darrshangovender/agent-tool-router"
+Issues = "https://github.com/darrshangovender/agent-tool-router/issues"
 
 [build-system]
 requires = ["hatchling"]
@@ -33,10 +38,11 @@ packages = ["agent_tool_router"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra -q"
+pythonpath = ["."]
 
 [tool.ruff]
-line-length = 110
+line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
