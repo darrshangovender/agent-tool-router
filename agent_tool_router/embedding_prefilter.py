@@ -20,6 +20,7 @@ similarity floor; the LLM judge actually picks. Two reasons:
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -77,17 +78,29 @@ class OpenAIEncoder:
 
 
 class StubEncoder:
-    """Deterministic hash-based encoder. Used in tests so the suite has no model dependency."""
+    """Deterministic hash-based encoder. Used in tests so the suite has no model dependency.
+
+    Buckets are chosen with blake2b rather than the builtin ``hash()``: string
+    hashing is salted per interpreter (PYTHONHASHSEED), so ``hash()`` put the same
+    token in a different bucket on every run. That made rankings vary run to run —
+    the suite failed intermittently — and it silently invalidated any
+    ``EmbeddingCache`` written by an earlier process, since the cached vectors came
+    from a different hash space than the ones being compared against them.
+    """
 
     def __init__(self, dim: int = 64, model_name: str = "stub") -> None:
         self.dim = dim
         self.model_name = model_name
 
+    @staticmethod
+    def _bucket(token: str) -> int:
+        return int.from_bytes(hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest(), "big")
+
     def encode(self, texts: list[str]) -> np.ndarray:
         out = np.zeros((len(texts), self.dim), dtype=np.float32)
         for i, text in enumerate(texts):
             for tok in text.lower().split():
-                idx = (hash(tok) & 0x7FFFFFFF) % self.dim
+                idx = self._bucket(tok) % self.dim
                 out[i, idx] += 1.0
         norms = np.linalg.norm(out, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
@@ -156,8 +169,11 @@ class EmbeddingPrefilter:
         k = max(1, min(k, len(self.tool_names)))
         qvec = self._embed_query(query)
         scores = self._matrix @ qvec  # both are unit-norm → cosine sim
-        # argsort ascending, take last k, reverse
-        order = np.argsort(scores, kind="stable")[::-1][:k]
+        # Sort the negated scores rather than reversing an ascending sort: a
+        # stable ascending sort keeps ties in insertion order, but reversing the
+        # whole array flips them, so the *last*-registered of two equally-scoring
+        # tools came out on top — the opposite of the documented tie-break.
+        order = np.argsort(-scores, kind="stable")[:k]
         return [Candidate(name=self.tool_names[i], score=float(scores[i])) for i in order]
 
     def _embed_query(self, query: str) -> np.ndarray:
