@@ -21,7 +21,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from agent_tool_router import Router, Tool  # noqa: E402
 from agent_tool_router.embedding_prefilter import make_encoder  # noqa: E402
 
-
 TOOLS = [
     Tool(
         name="issue_refund",
