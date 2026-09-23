@@ -27,7 +27,6 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from .embedding_prefilter import Candidate
 from .refusal import RefusalReason
 
-
 # ---------------------------------------------------------------------------
 # Pydantic output schema
 # ---------------------------------------------------------------------------
