@@ -8,7 +8,7 @@ import pytest
 
 from agent_tool_router import RefusalReason, Router, Tool
 from agent_tool_router.embedding_prefilter import StubEncoder
-from agent_tool_router.llm_judge import EchoBackend, LLMJudge, LLMBackend
+from agent_tool_router.llm_judge import EchoBackend, LLMBackend, LLMJudge
 from agent_tool_router.refusal import Refusal
 
 
