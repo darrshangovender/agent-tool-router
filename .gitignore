@@ -39,15 +39,22 @@ Thumbs.db
 *.swp
 
 # --- Data / models / logs ---
+# Downloaded datasets and trained artefacts stay out of git, but small YAML
+# fixtures under data/ are part of the repo (CI reads them), so keep those.
+data/*
+!data/*.yml
+!data/*.yaml
 *.csv
 *.parquet
 *.pkl
 *.joblib
 *.h5
 mlruns/
-data/
 logs/
 *.log
+
+# --- Benchmarks ---
+benchmarks/results.json
 
 # --- Docker ---
 docker-compose.override.yml
