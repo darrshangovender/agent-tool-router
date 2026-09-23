@@ -51,7 +51,7 @@ def test_router_refuses_out_of_corpus_query():
 def test_router_refuses_when_below_confidence_threshold():
     # Force the judge to return a pick whose confidence is below threshold.
     r = _router(threshold=0.99, low_floor=0.0, decisive_margin=0.0)
-    d = r.route("issue refund customer")
+    r.route("issue refund customer")
     # Confidence from EchoBackend tops out near 0.99; with threshold 0.99 it may flip either way.
     # Use a query that produces a moderate score by ensuring threshold is just above.
     r2 = _router(threshold=0.95, low_floor=0.0, decisive_margin=0.0)
