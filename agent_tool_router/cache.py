@@ -21,7 +21,7 @@ import numpy as np
 
 
 def _key(query: str, model: str) -> str:
-    h = hashlib.sha256(f"{model}::{query}".encode("utf-8")).hexdigest()
+    h = hashlib.sha256(f"{model}::{query}".encode()).hexdigest()
     return h[:32]
 
 
