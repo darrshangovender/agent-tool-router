@@ -80,3 +80,37 @@ def test_unit_norm_matrix():
     # StubEncoder normalises, so each row should have ~unit L2 norm.
     norms = np.linalg.norm(f._matrix, axis=1)
     assert np.allclose(norms, 1.0, atol=1e-5)
+
+
+def test_stub_encoder_is_deterministic_across_processes():
+    """StubEncoder bucketed tokens with the builtin hash(), which is salted per
+    interpreter — so 'deterministic' held within a run but not between runs. The
+    suite failed intermittently and a persisted EmbeddingCache was silently
+    incompatible with the next process's vectors."""
+    import subprocess
+    import sys
+
+    prog = (
+        "from agent_tool_router.embedding_prefilter import StubEncoder;"
+        "import numpy as np;"
+        "v = StubEncoder(dim=64).encode(['issue refund money']);"
+        "print(','.join(f'{x:.6f}' for x in v[0]))"
+    )
+    runs = {
+        subprocess.run(
+            [sys.executable, "-c", prog], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        for _ in range(3)
+    }
+    assert len(runs) == 1, "StubEncoder output differs between processes"
+
+
+def test_tie_break_is_insertion_order_not_reverse():
+    """argsort(...)[::-1] reverses ties as well as ranks, so the last-registered
+    of two identically-scoring tools was returned first."""
+    f = _filter(
+        ["alpha", "beta", "gamma"],
+        ["lookup customer account", "lookup customer account", "lookup customer account"],
+    )
+    out = f.top_k("lookup customer", k=3)
+    assert [c.name for c in out] == ["alpha", "beta", "gamma"]
