@@ -34,7 +34,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-class RefusalReason(str, Enum):
+class RefusalReason(str, Enum):  # noqa: UP042  StrEnum would change str()/format() output on exported API
     NO_MATCHING_TOOL = "no_matching_tool"
     AMBIGUOUS_MATCH = "ambiguous_match"
     LOW_CONFIDENCE = "low_confidence"
