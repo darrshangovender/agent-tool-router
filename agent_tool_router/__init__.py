@@ -7,8 +7,10 @@ Public surface:
     RefusalReason    — enum of the four refusal categories
 """
 
-from .embedding_prefilter import EmbeddingPrefilter
-from .llm_judge import JudgeDecision, LLMJudge
+from .cache import EmbeddingCache
+from .embedding_prefilter import EmbeddingPrefilter, HashingEncoder
+from .llm_judge import JudgeDecision, LLMJudge, RetryingBackend
+from .policy import PatternPolicy
 from .refusal import RefusalReason
 from .router import RouteDecision, Router, Tool
 
@@ -19,6 +21,10 @@ __all__ = [
     "RouteDecision",
     "RefusalReason",
     "EmbeddingPrefilter",
+    "EmbeddingCache",
+    "HashingEncoder",
     "LLMJudge",
     "JudgeDecision",
+    "PatternPolicy",
+    "RetryingBackend",
 ]

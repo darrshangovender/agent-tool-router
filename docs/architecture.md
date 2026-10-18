@@ -1,77 +1,58 @@
-# Architecture — why two stages
+# Architecture: why two stages
 
-The router has two stages on purpose. The cost trade-off only makes sense once you do the arithmetic, so here it is.
+The router has two stages on purpose. The trade-off is easier to see with the arithmetic in front of you, so it is a script: `python benchmarks/cost_model.py`. It is a calculation from ASSUMED token counts and list prices read from the providers' pricing pages on 2026-10-14, not a measurement; change the assumptions to match your prompts and measure real usage before quoting a figure.
 
 ## The shape of the problem
 
-A production agent typically registers between 5 and 50 tools. The naive approach — show every tool description to the LLM on every query — looks like this per route:
+A production agent typically registers somewhere between a handful and a few dozen tools. The naive design shows every tool description to the LLM on every query, so the judge's input grows linearly with the catalogue. The two-stage design shows it only the shortlist: a cheap, local, deterministic ranking picks the top-K candidates, and the judge decides among those.
 
-- Prompt overhead: ~80 tokens (system) + ~30 tokens (rules)
-- Per-tool description: ~40 tokens on average
-- Query: ~20 tokens
-- Output: ~80 tokens
-
-At **20 tools**, that's roughly `80 + 30 + 20*40 + 20 + 80 ≈ 1010` input tokens and 80 output tokens per route.
-
-Using `claude-haiku-4-5` at $0.80/$4.00 per 1M tokens:
+Under the assumptions in `benchmarks/cost_model.py` the saving is small for a catalogue of five tools and grows with catalogue size, because the shortlist costs the same however many tools exist:
 
 ```
-(1010 / 1_000_000) * 0.80 + (80 / 1_000_000) * 4.00 = $0.0011 per route
+| judge model | tools in catalogue | judge sees all tools (USD / 1,000 routes) | judge sees top-3 (USD / 1,000 routes) | saving |
+|---|---|---|---|---|
+| claude-haiku-4-5 | 5 | $0.850 | $0.770 | 9% |
+| claude-haiku-4-5 | 20 | $1.450 | $0.770 | 47% |
+| claude-haiku-4-5 | 50 | $2.650 | $0.770 | 71% |
+| gpt-4o-mini | 5 | $0.116 | $0.103 | 10% |
+| gpt-4o-mini | 20 | $0.206 | $0.103 | 50% |
+| gpt-4o-mini | 50 | $0.386 | $0.103 | 73% |
 ```
 
-That's `$1.10 per 1000 routes` and `$1100 per 1M routes`. For a chat product running 10M routes/month, you're paying ~$11k/month just to pick a tool — before any actual tool work runs.
+## What the prefilter costs you: recall
 
-## What the two-stage filter changes
-
-Stage 1 (embedding prefilter):
-
-- Tool descriptions are encoded **once** at startup, not per query.
-- Query embedding: 1 forward pass through a 22M-param MiniLM (~5ms on CPU). $0 if local; ~$0.00001 per route on the OpenAI embedding API.
-- Cosine similarity over a small matrix: <1ms.
-
-Stage 2 (LLM judge):
-
-- Sees only the top **K=3** candidates instead of all 20.
-- Prompt size drops from ~1010 to roughly `80 + 30 + 3*40 + 20 + 80 ≈ 330` input tokens.
-
-New cost per route on Haiku:
-
-```
-(330 / 1_000_000) * 0.80 + (80 / 1_000_000) * 4.00 = $0.00059 per route
-```
-
-That's **~46% cheaper** at 20 tools, and the saving grows linearly with catalogue size. At 50 tools the naive route is $0.0019 vs the two-stage $0.00059 — **a 69% reduction**.
-
-Plus the embedding step is deterministic and fully cacheable for templated queries (`show order #X`, `refund order #Y`), which knocks another chunk off in practice.
+The saving is only real if the right tool survives the shortlist. When it does not, the judge never sees it, and the outcome (`no_matching_tool`, or a wrong pick among the candidates) is indistinguishable from a catalogue that lacks the tool. That recall ceiling is measurable without any judge: `benchmarks/run.py` prints the prefilter's recall@1, recall@3 and recall@5 on the labelled queries. With the offline lexical encoder it is recall@1 / @3 / @5 of 72% / 80% / 88% on the 40 test-half queries that should route (see the README for the table and for what a semantic encoder does on the same queries).
 
 ## When the two-stage filter does NOT pay off
 
-The trade-off inverts when:
-
 | Situation | Why |
 |---|---|
-| **Fewer than ~5 tools** | The prefilter overhead (the model load, the always-on 5ms embed) costs more than just sending all descriptions to a cheap judge. |
-| **All tool descriptions are short and near-identical** | Embeddings can't separate "refund order" from "refund subscription" reliably; you'd be paying for an extra stage that adds noise. |
-| **Latency floor is sub-50ms** | The local embedding adds 5-15ms; the OpenAI embedding API adds 80-200ms over the network. If your SLO is tight, route directly with a fast judge. |
-| **You already paid for a frontier model** | A single Sonnet/GPT-4o call at 1000 tokens is fine. The two-stage matters most when you want to use a *small* judge (Haiku/4o-mini) and trust the prefilter to set it up for success. |
+| **A handful of tools** | The cost model above shows the saving is small, and the prefilter is one more moving part. Send all descriptions to a cheap judge. |
+| **Near-identical descriptions** | Embeddings cannot separate "refund an order" from "refund a subscription" reliably; the extra stage adds noise, and recall@K suffers. |
+| **A tight latency floor** | A local encoder adds a forward pass per query and a hosted encoder adds a network round trip. Measure both on your hardware (this repo does not publish a latency number it has not measured for your setup). |
+| **You already run a frontier model per request** | One long prompt is simpler. The two stages matter most when you want a *small* judge and a prefilter that sets it up for success. |
 
-## Why the judge stays — even though the embedding could "just pick top-1"
+## Why a judge at all, when the prefilter could "just pick top-1"
 
-Embeddings tell you "this query is in the neighbourhood of this tool description". They cannot tell you:
+Cosine similarity tells you "this query is in the neighbourhood of this tool description". It cannot tell you:
 
-- Whether the query *fully* matches the tool's intent or only partially overlaps. (`refund and cancel` is half `issue_refund`, half `cancel_subscription`.)
-- Whether two tools are equally plausible — which is the **ambiguous_match** refusal case.
-- Whether the query is asking for something the agent *shouldn't* do (the **out_of_scope** refusal).
-- Whether the judge would have to guess between two close candidates — the **low_confidence** path.
+- whether the query *fully* matches the tool's intent or only partly overlaps;
+- whether two tools are equally plausible (the **ambiguous_match** refusal);
+- whether the query asks for something the agent *shouldn't* do (the **out_of_scope** refusal);
+- whether any pick would be a guess (the **low_confidence** path).
 
-Picking top-1 by cosine is right ~70% of the time on the bundled benchmark. The LLM judge raises that to ~95% *and* gives you structured refusal data when it can't. The cost of that lift is one small-model call, gated by the prefilter so it stays cheap.
+The benchmark makes the first point concrete without a model: "always take the prefilter's top-1 tool" is a baseline that never refuses, so on the queries that should be refused it routes every one of them to some tool (a 100% false-route rate). Whether a real LLM judge closes that gap is exactly what this repository could not measure offline: see the README's Limitations.
 
-## Why structured output, not tool-calling
+## Why a policy hook as well
 
-OpenAI tools and Anthropic `tool_use` are convenient but they:
+An allow/deny decision should not depend on a similarity score or on a model that can be talked round. `Router(policy=...)` runs a deterministic function over the query *before* any embedding or model call and refuses `out_of_scope` when it fires. The benchmark reports the router with and without the example rules: they catch what they name and nothing else, and the README says so. They reduce risk; they do not replace authorisation on the tools themselves.
 
-1. Couple your agent to a specific provider's tool schema and parsing quirks.
-2. Don't compose well with a refusal taxonomy — you'd have to add a `refuse_with_reason` synthetic tool to every catalogue.
-3. Hide the model's reasoning (most providers don't surface why a tool was chosen).
+## Why structured output, not provider tool-calling
 
-The judge here returns plain JSON validated by Pydantic. Same idea, portable, easier to test, easier to log.
+OpenAI tools and Anthropic `tool_use` are convenient, but they:
+
+1. couple the agent to one provider's tool schema and parsing quirks;
+2. compose awkwardly with a refusal taxonomy (you would add a synthetic `refuse_with_reason` tool to every catalogue);
+3. surface little about why a tool was chosen.
+
+The judge here returns plain JSON validated by Pydantic: portable, easy to test, easy to log. A malformed reply, or a tool outside the shortlist, becomes a `low_confidence` refusal instead of an exception.

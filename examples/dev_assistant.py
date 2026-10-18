@@ -4,7 +4,8 @@ Ten tools, fifteen queries covering the common ChatOps surface: tests,
 deploys, code search, PRs, docs, formatting, dependency lookup, secrets.
 
     python examples/dev_assistant.py
-    python examples/dev_assistant.py --openai-embeddings
+    python examples/dev_assistant.py --encoder st       # needs sentence-transformers
+    python examples/dev_assistant.py --encoder openai   # needs OPENAI_API_KEY
 """
 
 from __future__ import annotations
@@ -61,13 +62,13 @@ QUERIES = [
 ]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--openai-embeddings", action="store_true")
+    parser.add_argument("--encoder", choices=["hashing", "st", "openai"], default="hashing")
     parser.add_argument("--top-k", type=int, default=3)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    encoder = make_encoder("openai" if args.openai_embeddings else "sentence-transformers")
+    encoder = make_encoder(args.encoder)
     router = Router(TOOLS, encoder=encoder, top_k=args.top_k)
     print(f"Routing {len(QUERIES)} queries against {len(router)} tools using {encoder.model_name}\n")
 

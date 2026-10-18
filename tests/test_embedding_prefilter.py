@@ -114,3 +114,19 @@ def test_tie_break_is_insertion_order_not_reverse():
     )
     out = f.top_k("lookup customer", k=3)
     assert [c.name for c in out] == ["alpha", "beta", "gamma"]
+
+
+def test_tie_break_holds_for_a_large_catalogue_with_mixed_scores():
+    """numpy's default (quicksort) argsort keeps ties in order only for tiny arrays (it falls back
+    to insertion sort below ~17 elements) or when every value is equal, so a 3-tool tie test cannot
+    tell `kind="stable"` from a plain sort. Sixty tools in three score groups can."""
+    texts = ["lookup customer account", "open support ticket", "search knowledge base"]
+    names = [f"tool_{i:02d}" for i in range(60)]
+    f = _filter(names, [texts[i % 3] for i in range(60)])
+    out = f.top_k("lookup customer account", k=60)
+    assert len(out) == 60
+    assert len({c.score for c in out}) <= 3, "the groups must tie exactly for this test to mean anything"
+    for earlier, later in zip(out, out[1:], strict=False):
+        assert earlier.score >= later.score
+        if earlier.score == later.score:
+            assert earlier.name < later.name, (earlier.name, later.name)

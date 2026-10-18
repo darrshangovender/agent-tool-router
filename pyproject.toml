@@ -1,32 +1,46 @@
 [project]
 name = "agent-tool-router"
 version = "0.1.0"
-description = "Two-stage tool router: embedding prefilter then LLM judge, with explicit refusal."
+description = "Two-stage tool router: an offline embedding prefilter, then an LLM judge, with refusal as a typed outcome. Runs end to end with no key; includes a labelled routing and refusal benchmark."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Darrshan Govender", email = "darrshangovender@gmail.com" }]
-keywords = ["llm", "agents", "tool-use", "function-calling", "routing", "embeddings"]
+keywords = ["llm", "agents", "tool-use", "function-calling", "routing", "embeddings", "refusal"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "pydantic>=2.7",
     "numpy>=1.26",
-    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-# sentence-transformers pulls in torch (~2 GB). It is opt-in: the test suite
-# runs against StubEncoder and never needs a real model.
+# sentence-transformers pulls in torch (~2 GB). It is opt-in: the tests, examples and benchmark
+# run on the offline HashingEncoder and never need a model.
 embeddings = ["sentence-transformers>=2.7"]
 openai = ["openai>=1.50.0"]
 anthropic = ["anthropic>=0.40.0"]
+# The SDKs are in dev so the tests can drive the real client code over a mock transport.
+# pyyaml reads the benchmark corpus.
 dev = [
     "pytest>=8.0",
     "pytest-cov>=4.1",
     "ruff>=0.6",
+    "pyyaml>=6.0",
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/darrshangovender/agent-tool-router"
+Repository = "https://github.com/darrshangovender/agent-tool-router"
 Issues = "https://github.com/darrshangovender/agent-tool-router/issues"
 
 [build-system]
@@ -46,5 +60,9 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
-ignore = ["E501"]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]        # long parametrised cases and docstrings read better unwrapped
+"examples/*" = ["E501"]     # tool descriptions are prose
+"benchmarks/*" = ["E501"]

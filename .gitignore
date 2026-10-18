@@ -44,6 +44,14 @@ Thumbs.db
 data/*
 !data/*.yml
 !data/*.yaml
+!data/*.json
+!data/*.jsonl
+!data/*.txt
+!data/*.md
+!data/**/*.jsonl
+!data/**/*.json
+!data/**/*.md
+!data/**/*.txt
 *.csv
 *.parquet
 *.pkl

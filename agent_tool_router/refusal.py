@@ -50,7 +50,9 @@ class Refusal(BaseModel):
 
     reason: RefusalReason
     message: str = Field(description="Human-readable explanation; safe to surface to end users.")
-    candidates: list[str] = Field(default_factory=list, description="Tool names the prefilter shortlisted.")
+    candidates: list[str] = Field(
+        default_factory=list, description="Tool names the prefilter shortlisted.",
+    )
     judge_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
     def __str__(self) -> str:

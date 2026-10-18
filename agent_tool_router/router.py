@@ -15,8 +15,9 @@ prefilter holds the encoded corpus, so reuse one Router per tool catalogue.
 from __future__ import annotations
 
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -75,6 +76,9 @@ class RouteDecision:
     reasoning: str
     candidates: list[Candidate] = field(default_factory=list)
     latency_ms: int = 0
+    #: Set when the refusal was caused by the judge backend failing (`on_judge_error="refuse"`),
+    #: not by the judge's own verdict: lets you alert on outages instead of reading them as taste.
+    error: str | None = None
 
     @property
     def is_route(self) -> bool:
@@ -98,9 +102,9 @@ class Router:
     tools:
         The catalogue. Order does not matter; names must be unique.
     encoder:
-        Optional pre-built encoder. If None, a sentence-transformers MiniLM
-        model is loaded. Pass `make_encoder("openai")` to use the OpenAI
-        embeddings API, or `make_encoder("stub")` for offline tests.
+        Optional pre-built encoder. If None, the offline lexical `HashingEncoder` is used:
+        deterministic and dependency-free, but it matches shared words, not meaning. Pass
+        `make_encoder("sentence-transformers")` or `make_encoder("openai")` for semantic matching.
     judge:
         Optional pre-built `LLMJudge`. If None, the EchoBackend stub is used —
         good for tests, NOT for production routing quality.
@@ -110,6 +114,18 @@ class Router:
         Picks with judge confidence below this become LOW_CONFIDENCE refusals.
     cache:
         Optional `EmbeddingCache` for query-side embedding reuse.
+    policy:
+        Optional `policy(query) -> str | None`, run BEFORE any embedding or model call. Return a
+        message to refuse the query as OUT_OF_SCOPE (blocked capability, PII export, ...), or None
+        to let it through. Scores cannot tell "allowed topic" from "forbidden request", and an LLM
+        judge can be talked round; an explicit rule is the dependable backstop.
+    on_judge_error:
+        "raise" (default) lets a failing judge backend (rate limit, outage) propagate. "refuse"
+        returns a LOW_CONFIDENCE refusal with `RouteDecision.error` set instead.
+    max_query_chars:
+        `route()` raises `ValueError` for a longer query (default 4,000). Policy regular
+        expressions and the judge prompt are written for chat-length input, and a user-supplied
+        pattern with two open-ended gaps takes time cubic in the query length.
     """
 
     def __init__(
@@ -121,7 +137,20 @@ class Router:
         top_k: int = 3,
         confidence_threshold: float = 0.5,
         cache: EmbeddingCache | None = None,
+        policy: Callable[[str], str | None] | None = None,
+        on_judge_error: Literal["raise", "refuse"] = "raise",
+        max_query_chars: int = 4000,
     ) -> None:
+        if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 1:
+            raise ValueError("top_k must be an integer >= 1")
+        if (not isinstance(confidence_threshold, int | float)
+                or not 0.0 <= confidence_threshold <= 1.0):
+            raise ValueError("confidence_threshold must be between 0 and 1")
+        if on_judge_error not in ("raise", "refuse"):
+            raise ValueError("on_judge_error must be 'raise' or 'refuse'")
+        if not isinstance(max_query_chars, int) or isinstance(max_query_chars, bool) \
+                or max_query_chars < 1:
+            raise ValueError("max_query_chars must be an integer >= 1")
         tool_list = list(tools)
         if not tool_list:
             raise ValueError("Router requires at least one tool")
@@ -135,15 +164,29 @@ class Router:
         self.prefilter = EmbeddingPrefilter(
             tool_names=names,
             tool_texts=[t.embed_text() for t in tool_list],
-            encoder=encoder or make_encoder("sentence-transformers"),
+            encoder=encoder or make_encoder("hashing"),
             cache=cache,
         )
         self.judge = judge or LLMJudge()
+        self.policy = policy
+        self.on_judge_error = on_judge_error
+        self.max_query_chars = max_query_chars
 
     # ---- public API ----------------------------------------------------
 
     def route(self, query: str) -> RouteDecision:
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be a non-empty string")
+        if len(query) > self.max_query_chars:
+            raise ValueError(
+                f"query is {len(query)} characters; the limit is {self.max_query_chars} "
+                "(max_query_chars). Policy rules and the prompt are sized for chat-length input."
+            )
         t0 = time.perf_counter()
+        if self.policy is not None:
+            blocked = self.policy(query)
+            if blocked:
+                return self._refuse(RefusalReason.OUT_OF_SCOPE, blocked, [], t0, judge_conf=None)
         candidates = self.prefilter.top_k(query, k=self.top_k)
         if not candidates:
             return self._refuse(
@@ -155,10 +198,22 @@ class Router:
             )
 
         descriptions = {name: tool.description for name, tool in self.tools.items()}
-        decision: JudgeDecision = self.judge.decide(query, candidates, tool_descriptions=descriptions)
+        args = {name: tool.args_schema for name, tool in self.tools.items() if tool.args_schema}
+        try:
+            decision: JudgeDecision = self.judge.decide(
+                query, candidates, tool_descriptions=descriptions, tool_args=args,
+            )
+        except Exception as exc:
+            if self.on_judge_error == "raise":
+                raise
+            message = f"Judge backend failed ({type(exc).__name__}); not routing."
+            out = self._refuse(RefusalReason.LOW_CONFIDENCE, message, candidates, t0, None)
+            out.error = f"{type(exc).__name__}: {exc}"[:300]
+            return out
 
         if decision.tool is None:
-            assert decision.refusal_reason is not None  # invariant from JudgeDecision validator
+            if decision.refusal_reason is None:       # unreachable: JudgeDecision validates this
+                raise RuntimeError("judge returned neither a tool nor a refusal reason")
             return self._refuse(
                 decision.refusal_reason,
                 decision.reasoning,
